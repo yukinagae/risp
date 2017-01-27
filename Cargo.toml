@@ -1,0 +1,7 @@
+[package]
+name = "risp"
+version = "0.1.0"
+authors = ["Yuki <yuki.nagae1130@gmail.com>"]
+
+[dependencies]
+regex = "*"
