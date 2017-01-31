@@ -58,6 +58,10 @@ fn eval(env: &mut Env, expr: E) -> EvalResult {
                 eval_atom(env, vec)
             } else if is_symbol("eq", &vec[0]) {
                 eval_eq(env, vec)
+            } else if is_symbol("car", &vec[0]) {
+                eval_car(env, vec)
+            } else if is_symbol("cdr", &vec[0]) {
+                eval_cdr(env, vec)
             } else {
                 Ok(Expr::empty_list())
             }
@@ -87,6 +91,35 @@ fn eval_eq(env: &mut Env, vec: Vec<E>) -> EvalResult {
         if (val1.is_empty_list() && val2.is_empty_list())
             || (val1.is_atom() && val2.is_atom() && val1.eq(&val2)) {
             Ok(Atom("t".to_string()))
+        } else {
+            Ok(Expr::empty_list())
+        }
+    }
+}
+
+fn eval_car(env: &mut Env, vec: Vec<E>) -> EvalResult {
+    if vec.len() != 2 {
+        Err("`car` expects exactly one argument.")
+    } else {
+        let val = try!(eval(env, vec[1].clone()));
+        if val.is_list() && !val.is_empty_list() {
+            let list = val.unwrap_list();
+            Ok(list[0].clone())
+        } else {
+            Ok(Expr::empty_list())
+        }
+    }
+}
+
+fn eval_cdr(env: &mut Env, vec: Vec<E>) -> EvalResult {
+    if vec.len() != 2 {
+        Err("`cdr` expects exactly one argument.")
+    } else {
+        let val = try!(eval(env, vec[1].clone()));
+        if val.is_list() && !val.is_empty_list() {
+            let mut list = val.unwrap_list();
+            list.remove(0);
+            Ok(List(list.clone()))
         } else {
             Ok(Expr::empty_list())
         }
@@ -186,15 +219,15 @@ fn main() {
 
     let mut env = Env::new();
 
-    let a1 = Atom("eq".to_string());
+    let a1 = Atom("cdr".to_string());
     let a2 = Atom("quote".to_string());
     let a3 = Atom("a".to_string());
-    let a4 = Atom("quote".to_string());
-    let a5 = Atom("a".to_string());
+    let a4 = Atom("b".to_string());
+    let a5 = Atom("c".to_string());
     // let list2 = List(vec![Atom("a".to_string()), Atom("b".to_string()), Atom("c".to_string())]);
     // let list1 = List(vec![a1, list2]);
 
-    let arg = List(vec![a1, List(vec![a2, List(vec![])]), List(vec![a4, List(vec![])])]);
+    let arg = List(vec![a1, List(vec![a2, List(vec![a3, a4, a5])])]);
 
     arg.p();
 
