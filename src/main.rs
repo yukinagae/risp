@@ -62,6 +62,10 @@ fn eval(env: &mut Env, expr: E) -> EvalResult {
                 eval_car(env, vec)
             } else if is_symbol("cdr", &vec[0]) {
                 eval_cdr(env, vec)
+            } else if is_symbol("cons", &vec[0]) {
+                eval_cons(env, vec)
+            } else if is_symbol("cond", &vec[0]) {
+                eval_cond(env, vec)
             } else {
                 Ok(Expr::empty_list())
             }
@@ -124,6 +128,41 @@ fn eval_cdr(env: &mut Env, vec: Vec<E>) -> EvalResult {
             Ok(Expr::empty_list())
         }
     }
+}
+
+fn eval_cons(env: &mut Env, vec: Vec<E>) -> EvalResult {
+    if vec.len() != 3 {
+        Err("`cons` expects exactly two argument.")
+    } else {
+        let val1 = try!(eval(env, vec[1].clone()));
+        let val2 = try!(eval(env, vec[2].clone()));
+        match val2 {
+            List(mut list) => {
+                list.insert(0, val1);
+                Ok(List(list))
+            },
+            _ => Err("`cons`'s second argument must be a list")
+        }
+    }
+}
+
+fn eval_cond(env: &mut Env, vec: Vec<E>) -> EvalResult {
+    for expr in vec.into_iter().skip(1) {
+        match expr {
+            List(list) => {
+                if list.len() != 2 {
+                    return Err("Invalid argument to `cond`");
+                } else {
+                    let val = try!(eval(env, list[0].clone()));
+                    if val.eq(&Atom("t".to_string())) {
+                        return eval(env, list[1].clone());
+                    }
+                }
+            },
+            _ => return Err("Invalid argument to `cond`")
+        }
+    }
+    Ok(Expr::empty_list())
 }
 
 fn is_symbol(op: &str, expr: &E) -> bool {
@@ -219,15 +258,29 @@ fn main() {
 
     let mut env = Env::new();
 
-    let a1 = Atom("cdr".to_string());
-    let a2 = Atom("quote".to_string());
-    let a3 = Atom("a".to_string());
-    let a4 = Atom("b".to_string());
-    let a5 = Atom("c".to_string());
-    // let list2 = List(vec![Atom("a".to_string()), Atom("b".to_string()), Atom("c".to_string())]);
-    // let list1 = List(vec![a1, list2]);
+    let cond = Atom("cond".to_string());
 
-    let arg = List(vec![a1, List(vec![a2, List(vec![a3, a4, a5])])]);
+    let f1 = Atom("quote".to_string());
+    let f2 = Atom("a".to_string());
+    let f3= Atom("quote".to_string());
+    let f4 = Atom("b".to_string());
+    let f5= Atom("quote".to_string());
+    let f6 = Atom("first".to_string());
+    let first = List(vec![Atom("eq".to_string()), List(vec![f1, f2]), List(vec![f3, f4])]);
+    let f_v = List(vec![f5, f6]);
+
+    first.p();
+
+    let s1 = Atom("quote".to_string());
+    let s2 = Atom("a".to_string());
+    let s3 = Atom("quote".to_string());
+    let s4 = Atom("second".to_string());
+    let second = List(vec![Atom("atom".to_string()), List(vec![s1, s2])]);
+    let s_v = List(vec![s3, s4]);
+
+    second.p();
+
+    let arg = List(vec![cond, List(vec![first, f_v]), List(vec![second, s_v])]);
 
     arg.p();
 
