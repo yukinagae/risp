@@ -1,8 +1,9 @@
+#![allow(unused_imports)]
+
 extern crate regex;
 
 use regex::Regex;
 use std::fmt;
-use std::ops::Add;
 
 use std::collections::HashMap;
 
@@ -19,6 +20,7 @@ enum Expr<T> {
 
 type E = Expr<String>;
 
+#[derive(Debug)]
 struct Env {
     bindings: HashMap<String, E>
 }
@@ -66,6 +68,8 @@ fn eval(env: &mut Env, expr: E) -> EvalResult {
                 eval_cons(env, vec)
             } else if is_symbol("cond", &vec[0]) {
                 eval_cond(env, vec)
+            } else if is_symbol("defun", &vec[0]) {
+                eval_defun(env, vec)
             } else {
                 Ok(Expr::empty_list())
             }
@@ -165,6 +169,39 @@ fn eval_cond(env: &mut Env, vec: Vec<E>) -> EvalResult {
     Ok(Expr::empty_list())
 }
 
+fn eval_defun(env: &mut Env, vec: Vec<E>) -> EvalResult {
+
+    if vec.len() != 4 {
+        Err("`defun` expects exactly three arguments.")
+    } else {
+
+        if !vec[1].is_atom() {
+            return Err("First argument to `defun` must be a symbol");
+        }
+
+        {
+            let params = vec[2].get_ref_list();
+            for p in params.iter() {
+                if !p.is_atom() {
+                    return Err("Second argument to `defun` must be a list of params");
+                }
+            }
+        }
+
+        let func_name = vec[1].clone();
+        let params = vec[2].clone();
+        let body = vec[3].clone();
+
+        let label_expr = List(vec![
+                Atom("label".to_string()),
+                func_name,
+                List(vec![Atom("lambda".to_string()), params, body])
+                ]);
+        env.bindings.insert(vec[1].clone().unwrap_atom(), label_expr);
+        Ok(Expr::empty_list())
+    }
+}
+
 fn is_symbol(op: &str, expr: &E) -> bool {
     if expr.is_atom() {
         let expr_op = expr.get_ref_atom();
@@ -238,6 +275,13 @@ impl<T> Expr<T> {
         }
     }
 
+    fn get_ref_list(&self) -> &Vec<Expr<T>> {
+        match *self {
+            List(ref v) => v,
+            _ => panic!("called Expression::get_ref_list() on non-List")
+        }
+    }
+
     fn unwrap_atom(self) -> T {
         match self {
             Atom(val) => val,
@@ -258,29 +302,12 @@ fn main() {
 
     let mut env = Env::new();
 
-    let cond = Atom("cond".to_string());
+    let defun = Atom("defun".to_string());
+    let label = Atom("f".to_string());
+    let params = List(vec![Atom("x".to_string()), Atom("y".to_string())]);
+    let body = List(vec![Atom("atom".to_string()), List(vec![Atom("quote".to_string()), Atom("x".to_string())])]);
 
-    let f1 = Atom("quote".to_string());
-    let f2 = Atom("a".to_string());
-    let f3= Atom("quote".to_string());
-    let f4 = Atom("b".to_string());
-    let f5= Atom("quote".to_string());
-    let f6 = Atom("first".to_string());
-    let first = List(vec![Atom("eq".to_string()), List(vec![f1, f2]), List(vec![f3, f4])]);
-    let f_v = List(vec![f5, f6]);
-
-    first.p();
-
-    let s1 = Atom("quote".to_string());
-    let s2 = Atom("a".to_string());
-    let s3 = Atom("quote".to_string());
-    let s4 = Atom("second".to_string());
-    let second = List(vec![Atom("atom".to_string()), List(vec![s1, s2])]);
-    let s_v = List(vec![s3, s4]);
-
-    second.p();
-
-    let arg = List(vec![cond, List(vec![first, f_v]), List(vec![second, s_v])]);
+    let arg = List(vec![defun, label, params, body]);
 
     arg.p();
 
@@ -289,6 +316,12 @@ fn main() {
     println!("{:?}", ret);
 
     ret.unwrap().p();
+
+    println!("{:?}", env);
+
+    println!("{:?}", env.find("f"));
+
+    env.find("f").unwrap().p();
 }
 
 #[test]
@@ -296,6 +329,7 @@ fn test_eval() {
     assert!(true);
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Token {
     name: &'static str,
@@ -303,6 +337,7 @@ struct Token {
 }
 
 /// Convert a string of characters into a list of tokens.
+#[allow(dead_code)]
 fn tokenize(input: &str) ->Vec<Token> {
     let replaced_input: String = input.replace("(", " ( ").replace(")", " ) ");
     let words: Vec<String> = replaced_input.split_whitespace().map(String::from).collect();
@@ -327,8 +362,10 @@ fn tokenize(input: &str) ->Vec<Token> {
     return tokens;
 }
 
+#[allow(dead_code)]
 fn parse(program: &str) -> Vec<String> {
     // TODO
+    println!("{}", program);
     return Vec::new();
 }
 
