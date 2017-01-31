@@ -71,7 +71,7 @@ fn eval(env: &mut Env, expr: E) -> EvalResult {
             } else if is_symbol("defun", &vec[0]) {
                 eval_defun(env, vec)
             } else {
-                Ok(Expr::empty_list())
+                eval_func_call(env, vec)
             }
         }
     }
@@ -199,6 +199,40 @@ fn eval_defun(env: &mut Env, vec: Vec<E>) -> EvalResult {
                 ]);
         env.bindings.insert(vec[1].clone().unwrap_atom(), label_expr);
         Ok(Expr::empty_list())
+    }
+}
+
+fn eval_func_call(env: &mut Env, vec: Vec<E>) -> EvalResult {
+    Ok(Expr::empty_list())
+}
+
+#[derive(Debug)]
+struct Func {
+    params: Vec<String>,
+    body: E,
+    sym: Option<String>,
+}
+
+fn parse_lambda_literal(expr: &E) -> Option<Func> {
+    if !expr.is_list() {
+        None
+    } else {
+        let vec = expr.get_ref_list();
+        if vec.len() != 3 || !vec[1].is_list() || !is_symbol("lambda", &vec[0]) {
+            None
+        } else {
+            let params = vec[1].get_ref_list();
+            let mut plist = vec![];
+
+            for p in params.iter() {
+                if !p.is_atom() {
+                    return None
+                } else {
+                    plist.push(p.clone().unwrap_atom());
+                }
+            }
+            Some(Func{ params: plist, body: vec[2].clone(), sym: None })
+        }
     }
 }
 
