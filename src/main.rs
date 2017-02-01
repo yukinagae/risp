@@ -20,7 +20,7 @@ enum Expr<T> {
 
 type E = Expr<String>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Env {
     bindings: HashMap<String, E>
 }
@@ -47,37 +47,31 @@ fn eval(env: &mut Env, expr: E) -> EvalResult {
             }
         },
         List(vec) => {
-            if vec.len() == 0 {
-                return Err("No procedure to call.")
-            }
-            if is_symbol("quote", &vec[0]) {
-                if vec.len() != 2 {
-                    Err("`quote` expects exactly one argument.")
-                } else {
-                    Ok(vec[1].clone())
-                }
-            } else if is_symbol("atom", &vec[0]) {
-                eval_atom(env, vec)
-            } else if is_symbol("eq", &vec[0]) {
-                eval_eq(env, vec)
-            } else if is_symbol("car", &vec[0]) {
-                eval_car(env, vec)
-            } else if is_symbol("cdr", &vec[0]) {
-                eval_cdr(env, vec)
-            } else if is_symbol("cons", &vec[0]) {
-                eval_cons(env, vec)
-            } else if is_symbol("cond", &vec[0]) {
-                eval_cond(env, vec)
-            } else if is_symbol("defun", &vec[0]) {
-                eval_defun(env, vec)
-            } else {
-                eval_func_call(env, vec)
+            match vec {
+                ref v if v.len() == 0 => Err("No procedure to call."),
+                ref v if is_symbol("quote", &v[0]) => eval_quote(v),
+                ref v if is_symbol("atom", &v[0]) => eval_atom(env, v),
+                ref v if is_symbol("eq", &v[0]) => eval_eq(env, v),
+                ref v if is_symbol("car", &v[0]) => eval_car(env, v),
+                ref v if is_symbol("cdr", &v[0]) => eval_cdr(env, v),
+                ref v if is_symbol("cons", &v[0]) => eval_cons(env, v),
+                ref v if is_symbol("cond", &v[0]) => eval_cond(env, v),
+                ref v if is_symbol("defun", &v[0]) => eval_defun(env, v),
+                ref v => eval_func_call(env, v.clone()),
             }
         }
     }
 }
 
-fn eval_atom(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_quote(vec: &Vec<E>) -> EvalResult {
+    if vec.len() != 2 {
+       Err("`quote` expects exactly one argument.")
+    } else {
+        Ok(vec[1].clone())
+    }
+}
+
+fn eval_atom(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     if vec.len() != 2 {
         Err("`atom` expects exactly one argument.")
     } else {
@@ -90,7 +84,7 @@ fn eval_atom(env: &mut Env, vec: Vec<E>) -> EvalResult {
     }
 }
 
-fn eval_eq(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_eq(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     if vec.len() != 3 {
         Err("`eq` expects exactly two arguments.")
     } else {
@@ -105,7 +99,7 @@ fn eval_eq(env: &mut Env, vec: Vec<E>) -> EvalResult {
     }
 }
 
-fn eval_car(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_car(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     if vec.len() != 2 {
         Err("`car` expects exactly one argument.")
     } else {
@@ -119,7 +113,7 @@ fn eval_car(env: &mut Env, vec: Vec<E>) -> EvalResult {
     }
 }
 
-fn eval_cdr(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_cdr(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     if vec.len() != 2 {
         Err("`cdr` expects exactly one argument.")
     } else {
@@ -134,7 +128,7 @@ fn eval_cdr(env: &mut Env, vec: Vec<E>) -> EvalResult {
     }
 }
 
-fn eval_cons(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_cons(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     if vec.len() != 3 {
         Err("`cons` expects exactly two argument.")
     } else {
@@ -150,10 +144,10 @@ fn eval_cons(env: &mut Env, vec: Vec<E>) -> EvalResult {
     }
 }
 
-fn eval_cond(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_cond(env: &mut Env, vec: &Vec<E>) -> EvalResult {
     for expr in vec.into_iter().skip(1) {
-        match expr {
-            List(list) => {
+        match *expr {
+            List(ref list) => {
                 if list.len() != 2 {
                     return Err("Invalid argument to `cond`");
                 } else {
@@ -169,7 +163,7 @@ fn eval_cond(env: &mut Env, vec: Vec<E>) -> EvalResult {
     Ok(Expr::empty_list())
 }
 
-fn eval_defun(env: &mut Env, vec: Vec<E>) -> EvalResult {
+fn eval_defun(env: &mut Env, vec: &Vec<E>) -> EvalResult {
 
     if vec.len() != 4 {
         Err("`defun` expects exactly three arguments.")
@@ -203,7 +197,53 @@ fn eval_defun(env: &mut Env, vec: Vec<E>) -> EvalResult {
 }
 
 fn eval_func_call(env: &mut Env, vec: Vec<E>) -> EvalResult {
-    Ok(Expr::empty_list())
+
+    let num_args = vec.len() - 1;
+
+    let mut vec_iter = vec.into_iter();
+    let mut op_expr = vec_iter.next().unwrap();
+
+    let func_lit = match parse_func_literal(&op_expr) {
+        Some(f) => f,
+        None =>  {
+            op_expr = try!(eval(env, op_expr));
+            match parse_func_literal(&op_expr) {
+                Some(f) => f,
+                None => return Err("Unrecognized expression."),
+            }
+        }
+    };
+
+    let Func {params, body, sym} = func_lit;
+    let mut bindings = HashMap::<String, E>::new();
+
+    match sym {
+        Some(s) => {
+            bindings.insert(s, op_expr.clone());
+        }
+        None => {},
+    }
+
+    if params.len() != num_args {
+        return Err("mismatch between number of procedure args and number of args called with.");
+    }
+
+    let mut param_iter = params.into_iter();
+
+    for arg in vec_iter {
+        let next_param = param_iter.next().unwrap();
+        bindings.insert(next_param, try!(eval(env, arg)));
+    }
+
+    let mut new_env = env.clone();
+
+    for (k, v) in bindings.into_iter() {
+        new_env.bindings.insert(k, v);
+    }
+
+    let val = try!(eval(&mut new_env, body));
+
+    Ok(val)
 }
 
 #[derive(Debug)]
@@ -211,6 +251,34 @@ struct Func {
     params: Vec<String>,
     body: E,
     sym: Option<String>,
+}
+
+fn parse_label_literal(expr: &E) -> Option<Func> {
+    if !expr.is_list() {
+        return None;
+    }
+    let vec = expr.get_ref_list();
+
+    if vec.len() != 3 || !vec[1].is_atom() || !is_symbol("label", &vec[0]) {
+        return None;
+    }
+
+    let lit = parse_lambda_literal(&vec[2]);
+
+    match lit {
+        None => None,
+        Some(mut func) => {
+            func.sym = Some(vec[1].clone().unwrap_atom());
+            Some(func)
+        }
+    }
+}
+
+fn parse_func_literal(expr: &E) -> Option<Func> {
+    match parse_lambda_literal(expr) {
+        None => parse_label_literal(expr),
+        lambda@Some(_) => lambda
+    }
 }
 
 fn parse_lambda_literal(expr: &E) -> Option<Func> {
@@ -336,13 +404,21 @@ fn main() {
 
     let mut env = Env::new();
 
-    let defun = Atom("defun".to_string());
-    let label = Atom("f".to_string());
+    let lambda = Atom("lambda".to_string());
+    // let params = List(vec![Atom("x".to_string())]);
     let params = List(vec![Atom("x".to_string()), Atom("y".to_string())]);
-    let body = List(vec![Atom("atom".to_string()), List(vec![Atom("quote".to_string()), Atom("x".to_string())])]);
+    // let body = List(vec![Atom("cons".to_string()), Atom("x".to_string()), List(vec![Atom("quote".to_string()), List(vec![Atom("b".to_string())])])]);
+    let body = List(vec![Atom("cons".to_string()), Atom("x".to_string()), List(vec![Atom("cdr".to_string()), Atom("y".to_string())])]);
 
-    let arg = List(vec![defun, label, params, body]);
+    // let label = Atom("label".to_string());
+    // let func_name = Atom("foo".to_string());
 
+    let func = List(vec![lambda, params, body]);
+
+    let a2 = List(vec![Atom("quote".to_string()), List(vec![Atom("a".to_string()), Atom("b".to_string()), Atom("c".to_string())])]);
+    let arg = List(vec![func, List(vec![Atom("quote".to_string()), Atom("z".to_string())]), a2]);
+
+    println!("{:?}", arg);
     arg.p();
 
     let ret = eval(&mut env, arg);
@@ -355,7 +431,7 @@ fn main() {
 
     println!("{:?}", env.find("f"));
 
-    env.find("f").unwrap().p();
+    // env.find("f").unwrap().p();
 }
 
 #[test]
